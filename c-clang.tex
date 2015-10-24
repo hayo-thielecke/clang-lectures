@@ -75,5 +75,89 @@ Optimizations
 
 \end{frame}
 
+
+\begin{frame}{Clang and LLVM, the bestest and mostest}
+
+Clang C/C++ compiler
+
+\url{http://clang.llvm.org}
+
+Compiler Infrastructure
+
+\url{http://llvm.org}
+
+\url{http://www.aosabook.org/en/llvm.html}
+
+Apple 
+\url{https://developer.apple.com/xcode/}
+
+Many projects, for example:
+
+Emscripten: An LLVM to JavaScript Compiler
+
+Rust: a safe, concurrent, practical language
+
+\end{frame}
+
+\begin{frame}{Two big ideas in compiling functions}
+
+\begin{block}{stack $\leftrightarrow$ recursion}
+
+compare: parsing stack
+
+many abstract and not so abstract machines use stacks
+
+including JVM
+
+In C: one stack frame per function call
+\end{block}
+
+\begin{block}{Names $\to$ indices}
+Names can be compiled into indices, discovered many times
+
+%deBruijn indices: lambda calculus without variables
+%
+%cartesian closed categories, CAM machine for CAML
+
+In C: variables become small integers to be added to the base pointer
+
+\end{block}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Call stack: used by C at run time for function calls}
+
+%On most hardware, the stack grows towards smaller addresses.
+
+Convention: we draw the stack growing \alert{downwards} on the page. 
+
+Suppose function \texttt g calls function \texttt f.
+
+
+\begin{tikzpicture}[scale=.8]
+  \stacktop{}
+  \startframe
+      \cell{}  
+\cellcom{parameters for \texttt g} 
+    \cell{}  
+\cellcom{return address for \texttt g} 
+      \cell{}        
+    \cellcom{automatic variables in g}         
+\finishframe{frame for \texttt g\ } 
+  \startframe
+  \cell{}  
+    \cellcom{parameters for f} 
+  \cell{}  
+\cellcom{return address  for \texttt f} 
+  \cell{}  
+    \cellcom{automatic variables in f}
+ \finishframe{frame for \texttt f\ } 
+\end{tikzpicture}
+There may be more in the frame, e.g. saved registers  
+\end{frame}   
+
+
+
 \end{document}
 
