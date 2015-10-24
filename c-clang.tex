@@ -1,0 +1,79 @@
+\documentclass[landscape]{beamer}
+
+\usepackage{drawstack}
+
+\title{Functions and stack frames
+\\[1em]
+\(
+ C \stackrel{\mbox{Clang}}{\longrightarrow} x86
+ \)
+ }
+\author{Hayo Thielecke
+\\
+University of Birmingham
+\\
+\url{http://www.cs.bham.ac.uk/~hxt}
+}
+
+
+\begin{document}
+
+\begin{frame}{}
+\maketitle
+\end{frame}
+
+\begin{frame}{Contents}
+\tableofcontents
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}{Structure of the module}
+
+\begin{block}{Parsing \checkmark}
+\begin{itemize}
+\item Progression from: Language + Logic, Models of Computation
+\item abstract machines, formal,``mathy''
+\end{itemize}
+\end{block}
+
+\begin{block}{C and call stack}
+\begin{itemize}
+\item Progression from: Computer Systems + Architecture, C/C++
+\item not so formal, by example, x86 machine code
+\end{itemize}
+\end{block}
+
+\begin{block}{Implementing functional languages}
+\begin{itemize}
+\item Progression from: functional programming
+\item builds on abstract machines and C stack
+\end{itemize}
+\end{block}
+
+\end{frame}
+
+\begin{frame}{Aims and overview}
+
+\begin{itemize}
+\item
+We will see some typical C code compiled to x86 assembly by LLVM
+\item Emphasise general principles used in almost all compilers
+\item Use LLVM on C and x86 for example and concreteness
+\item
+\alert{What} LLVM does, not details of \alert{how} it does it internally
+\item
+Enough to compile some C code by hand line by line
+\item
+C language features $\mapsto$ soup of mainly mov instructions
+\item
+Various language features on top of vanilla functions
+\item
+Optimizations
+
+\end{itemize}
+
+\end{frame}
+
+\end{document}
+
