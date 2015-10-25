@@ -99,6 +99,37 @@ Rust: a safe, concurrent, practical language
 
 \end{frame}
 
+
+\begin{frame}[fragile]{Typical C code to compile}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long x, long y)
+{
+  long a, b;
+  a = x + 42;
+  b = y + 23;
+  return a * b;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+Parameters/arguments:
+\\
+ x and y
+
+Local/automatic variables
+\\
+ a and b 
+\end{minipage}
+\\[4em]
+
+More precisely, x and y are formal parameters.
+
+In a call f(1,2), 1 and 2 are the actual parameters.
+
+\end{frame}
+
 \begin{frame}{Two big ideas in compiling functions}
 
 \begin{block}{stack $\leftrightarrow$ recursion}
