@@ -8,4 +8,12 @@ c-clang.toc
 c-clang.nav
 c-clang.vrb
 c-clang.synctex.gz
+c-clang-notes.synctex.gz
+c-clang-notes.aux
+c-clang-notes.toc
+c-clang-notes.log
+c-clang-notes.pdf
+c-clang-notes.dvi
+c-clang-notes.out
 drawstack.sty
+.gitignore~

@@ -249,5 +249,144 @@ return value is passed in register rax
 \end{frame}
 
 
+\begin{frame}[fragile]{Stack frame in clang C calling convention on x86}
+The stack grows down on the page
+
+lower addresses are lower on the page
+
+\begin{tikzpicture}[scale=.6]
+  \startframe
+     \cell{return addr} 
+    \cell{old bp}  \cellptr{\textrm{frame/base pointer}} 
+      \cell{parameter n}
+     \cell[padding]{\vdots}
+         \cell{parameter 1} %\cellptr{\texttt{stack} + 2}
+    \cell{local var}
+     \cell[padding]{\vdots}
+    \cell{local var}\cellptr{\textrm{stack pointer, if used}} 
+%\finishframe{array} 
+\end{tikzpicture}
+  
+\end{frame} 
+
+
+\begin{frame}[fragile]{Clang stack frame example}
+The stack grows down on the page
+
+lower addresses are lower on the page
+
+parameters are passed in registers, may be saved into frame if needed
+
+\begin{tikzpicture}[scale=.6]
+ % \startframe
+     \cell{return addr} 
+    \cell{old bp}  \cellptr{\textrm{base pointer}} 
+      \cell{y}\cellptr{\textrm{bp - 8}}
+         \cell{x} \cellptr{\textrm{bp - 16}}
+    \cell{a}  \cellptr{\textrm{bp - 24}}
+    \cell{b} \cellptr{\textrm{bp - 32}}
+% \finishframe{array} 
+\end{tikzpicture}
+  
+\end{frame} 
+
+
+\begin{frame}[fragile]{Compiled with clang -S}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long x, long y)
+{
+  long a, b;
+  a = x + 42;
+  b = y + 23;
+  return a * b;
+}
+\end{verbatim}
+
+y$\mapsto$ rbp-8
+
+x$\mapsto$ rbp-16
+
+a$\mapsto$ rbp-24
+
+b$\mapsto$ rbp-32
+
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movq	%rdi, -8(%rbp)
+	movq	%rsi, -16(%rbp)
+	movq	-8(%rbp), %rsi
+	addq	$42, %rsi
+	movq	%rsi, -24(%rbp)
+	movq	-16(%rbp), %rsi
+	addq	$23, %rsi
+	movq	%rsi, -32(%rbp)
+	movq	-24(%rbp), %rsi
+	imulq	-32(%rbp), %rsi
+	movq	%rsi, %rax
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+
+\begin{frame}[fragile]{Compiled with clang -S -O3}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long x, long y)
+{
+  long a, b;
+  a = x + 42;
+  b = y + 23;
+  return a * b;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:                                      
+	addq	$42, %rdi
+	leaq	23(%rsi), %rax
+	imulq	%rdi, %rax
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+
+\begin{frame}[fragile]{Many arguments}
+Some passed on the stack, not in registers. These have positive indices. Why?
+\\[2em]
+
+\begin{minipage}{.6\textwidth}
+\begin{verbatim}
+long a(long x1, long x2, 
+long x3, long x4, long x5, 
+long x6, long x7, long x8)
+{
+  return x1 + x7 + x8;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.3\textwidth}
+\begin{verbatim}
+a:                             
+	addq	8(%rsp), %rdi
+	addq	16(%rsp), %rdi
+	movq	%rdi, %rax
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+
 \end{document}
 
