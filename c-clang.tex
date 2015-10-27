@@ -305,7 +305,7 @@ this pointer for member functions (in C++)
 \end{frame}
 
 
-\begin{frame}[fragile]{Call stack: used by C at run time for function calls}
+\begin{frame}[fragile]{A traditional stack layout (but not Clang)}
 
 %On most hardware, the stack grows towards smaller addresses.
 
@@ -356,9 +356,9 @@ long factorial(long n)
 
 \begin{frame}[fragile]{Call stack: one frame per function \alert{call}}
 
-%On most hardware, the stack grows towards smaller addresses.
+Recursion example: fac(n) calls fac(n - 1). Each recursive call gets a smaller parameter.
 
-Recursion example: fac(n) calls fac(n - 1). Each recursive call gets a smaller agument.
+The return address points into the code segments, \alert{not the stack} or heap.
 
 What are the return addresses?
 \\[1em]
@@ -367,25 +367,24 @@ What are the return addresses?
   \stacktop{}
     \startframe
       \cell{2}  
-    \cellcom{argument}
+    \cellcom{parameter}
   \cell{return address}  
   \finishframe{frame for {fac(2)}} 
   \startframe
       \cell{1}  
-    \cellcom{argument}
+    \cellcom{parameter}
   \cell{return address}  
   \finishframe{frame for {fac(1)}} 
   \startframe
   \cell{0}  
-    \cellcom{argument} 
+    \cellcom{parameter} 
   \cell{return address}  
  \finishframe{frame for fac(0)} 
 \end{tikzpicture}
 
 \end{frame}   
 
-\begin{frame}[fragile]{Return addess example}
-The return address points into the code segments, \alert{not the stack} or heap.
+\begin{frame}[fragile]{Return address example}
 
 \begin{verbatim}
 long factorial(long n)
@@ -397,14 +396,52 @@ long factorial(long n)
 }
 \end{verbatim}
 
-The return address is a pointer to the compiled code just before 
+The return address is a pointer to the compiled code. The returned value is returned into the hole $\bigcirc$ position in the last statement,
 \[
-\ldots
-\texttt{* n}
+\texttt{return $\bigcirc$ * n;}
 \]
+Thus when the function returns, 1 is plugged into the hole, then 2, then 6, \ldots
 
-The proper way to understand return addresses is continuation passing. We won't get into that, at least not yet.
+The return address represents a continuation.
 \end{frame}
+
+\begin{frame}{Calling conventions and stack frame layout}
+
+The calling convention differs between compilers and architectures
+
+Old school: 
+\\push arguments onto stack, then do a call instruction (which pushes return address)
+
+Modern architectures have many registers
+\\
+$\Rightarrow$ pass arguments in registers when possible; Clang does this
+
+Some RISC architectures put return address into a link register
+
+more exotic: SPARC has register windows for parameter passing
+\end{frame}
+
+
+\begin{frame}[fragile]{Stack frame in clang C calling convention on x86}
+
+Clang \alert{passes parameters in registers} \texttt{rdi}, \texttt{rds}, \ldots
+
+The parameters \alert{also have a slot in the frame}
+
+\begin{tikzpicture}[scale=.6]
+  \startframe
+     \cell{return addr} 
+    \cell{old bp}  \cellptr{\textrm{frame/base pointer}} 
+      \cell{parameter n}
+     \cell[padding]{\vdots}
+         \cell{parameter 1} %\cellptr{\texttt{stack} + 2}
+    \cell{local var}
+     \cell[padding]{\vdots}
+    \cell{local var}\cellptr{\textrm{stack pointer, if used}} 
+%\finishframe{array} 
+\end{tikzpicture}
+  
+\end{frame} 
 
 
 \begin{frame}[fragile]{Clang function idiom}
@@ -426,34 +463,40 @@ return value is passed in register rax
 \end{frame}
 
 
-\begin{frame}[fragile]{Stack frame in clang C calling convention on x86}
-The stack grows down on the page
 
-lower addresses are lower on the page
+\begin{frame}[fragile]{Computing the index in the frame}
 
-\begin{tikzpicture}[scale=.6]
-  \startframe
-     \cell{return addr} 
-    \cell{old bp}  \cellptr{\textrm{frame/base pointer}} 
-      \cell{parameter n}
-     \cell[padding]{\vdots}
-         \cell{parameter 1} %\cellptr{\texttt{stack} + 2}
-    \cell{local var}
-     \cell[padding]{\vdots}
-    \cell{local var}\cellptr{\textrm{stack pointer, if used}} 
-%\finishframe{array} 
-\end{tikzpicture}
-  
-\end{frame} 
+Simple in principle: 
+\\
+walk over the syntax tree and keep track of declarations
 
+The declarations tell us the size: long x means x needs 8 bytes
+
+That is why C has type declarations in the first place
+
+\begin{verbatim}
+long f(int x, int y) // put y at -8 and x at -16
+{
+    int a;    // put a at -24
+    int b;    // put b at -32
+    a = x;    // now we know where a and x are 
+              // relative to rbp
+}    
+\end{verbatim}
+
+Exercise: what happens if we also have char and float declarations?    
+\end{frame}
 
 \begin{frame}[fragile]{Clang stack frame example}
-The stack grows down on the page
-
-lower addresses are lower on the page
-
-parameters are passed in registers, may be saved into frame if needed
-
+\begin{verbatim}
+long f(int x, int y) // put y at -8 and x at -16
+{
+    int a;    // put a at -24
+    int b;    // put b at -32
+    ...
+}
+\end{verbatim}
+  
 \begin{tikzpicture}[scale=.6]
  % \startframe
      \cell{return addr} 
@@ -469,7 +512,7 @@ parameters are passed in registers, may be saved into frame if needed
 
 
 \begin{frame}[fragile]{Compiled with clang -S}
-\begin{minipage}{.5\textwidth}
+\begin{minipage}{.55\textwidth}
 \begin{verbatim}
 long f(long x, long y)
 {
@@ -480,13 +523,19 @@ long f(long x, long y)
 }
 \end{verbatim}
 
-y$\mapsto$ rbp-8
-
-x$\mapsto$ rbp-16
-
-a$\mapsto$ rbp-24
-
-b$\mapsto$ rbp-32
+\begin{eqnarray*}
+\texttt y&\mapsto& \texttt{rdi}
+\\
+\texttt x&\mapsto& \texttt{rsi}
+\\
+\texttt y&\mapsto& \texttt{rbp}-8
+\\
+\texttt x&\mapsto& \texttt{rbp}-16 
+\\
+\texttt a&\mapsto& \texttt{rbp}-24
+\\
+\texttt b&\mapsto& \texttt{rbp}-32
+\end{eqnarray*}
 
 \end{minipage}
 %
@@ -513,29 +562,8 @@ f:
 \end{frame}
 
 
-\begin{frame}[fragile]{Computing the index}
 
-Simple in principle: 
-\\
-walk over the syntax tree and keep track of declarations
-
-The declarations tell us the size: long x means x needs 8 bytes
-
-That is why C has type declarations in the first place
-
-\begin{verbatim}
-long f(int x, int y) // put y at -8 and x at -16
-{
-    int a;    // put a at -24
-    int b;    // put b at -32
-    a = x;    // now we know where a and x are 
-              // relative to rbp
-}    
-\end{verbatim}
-
-Exercise: what happens if we also have char and float declarations?    
-\end{frame}
-\begin{frame}[fragile]{Compiled with clang -S -O3}
+\begin{frame}[fragile]{Optimization: compiled with clang -S -O3}
 \begin{minipage}{.5\textwidth}
 \begin{verbatim}
 long f(long x, long y)
@@ -558,7 +586,6 @@ f:
 \end{verbatim}
 \end{minipage}
 \end{frame}
-
 
 \begin{frame}[fragile]{Many arguments}
 Some passed on the stack, not in registers. These have positive indices. Why?
