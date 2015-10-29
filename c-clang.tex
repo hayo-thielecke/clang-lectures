@@ -587,11 +587,11 @@ f:
 \end{minipage}
 \end{frame}
 
-\begin{frame}[fragile]{Many arguments}
+\begin{frame}[fragile]{Many arguments $\Rightarrow$ spill into the stack}
 Some passed on the stack, not in registers. These have positive indices. Why?
 \\[2em]
 
-\begin{minipage}{.6\textwidth}
+\begin{minipage}{.55\textwidth}
 \begin{verbatim}
 long a(long x1, long x2, 
 long x3, long x4, long x5, 
@@ -602,7 +602,7 @@ long x6, long x7, long x8)
 \end{verbatim}
 \end{minipage}
 %
-\begin{minipage}{.3\textwidth}
+\begin{minipage}{.4\textwidth}
 \begin{verbatim}
 a:                             
 	addq	8(%rsp), %rdi
@@ -611,7 +611,290 @@ a:
 	ret
 \end{verbatim}
 \end{minipage}
+\vspace{2em}
+
+We will not use lots of arguments. While a C compiler must allow it, it is not good style.
+
 \end{frame}
+
+\begin{frame}[fragile]{Calling another function}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long x)
+{
+  return g(x + 2) - 7;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:  
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$16, %rsp
+	movq	%rdi, -8(%rbp)
+	movq	-8(%rbp), %rdi
+	addq	$2, %rdi
+	callq	g
+	subq	$7, %rax
+	addq	$16, %rsp
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+\vspace{1em}
+
+Why is there the following code?
+\begin{verbatim}
+	subq	$16, %rsp
+	...
+	addq	$16, %rsp	
+\end{verbatim}
+
+
+\end{frame}
+
+
+\section{Pointers as parameters and call by reference}
+
+
+\begin{frame}[fragile]{Call by reference in C = call by value + pointer}
+\small
+\begin{verbatim}
+void f(int *p)
+{
+    *p = *p + 2; // draw stack after this statement
+}
+
+void g()
+{
+    int x = 10;
+    f(&x);
+}
+\end{verbatim}
+
+\begin{drawstack}[scale=.6]
+\stacktop{}
+  
+% \startframe
+    \cell{12}  \cellcomL{x}
+    \coordinate (a) at (currentcell.east);
+          \cell{\dots}  
+     \separator 
+       \cell{\dots} 
+%\finishframe{g} 
+%\startframe
+     \cell{$\bullet$}  \cellcomL{p}
+ \coordinate (p) at (currentcell.center);
+%\finishframe{f} 
+  \draw[->] (p) .. controls (4,-4) and (4,-1)  .. (a);
+\end{drawstack}
+  
+\end{frame} 
+
+
+
+\begin{frame}[fragile]{For comparison: call by value modifies only local copy}
+\small
+\begin{verbatim}
+void f(int y)
+{
+    y = y + 2; // draw stack after this statement
+}
+
+void g()
+{
+    int x = 10;
+    f(x);
+}
+\end{verbatim}
+
+\begin{drawstack}[scale=.6]
+\stacktop{}
+  
+% \startframe
+    \cell{10}  \cellcomL{x}
+    \coordinate (a) at (currentcell.east);
+          \cell{\dots}  
+     \separator 
+       \cell{\dots} 
+%\finishframe{g} 
+%\startframe
+     \cell{$12$}  \cellcomL{y}
+ \coordinate (p) at (currentcell.center);
+%\finishframe{f} 
+%  \draw[->] (p) .. controls (4,-4.5) and (4,-1)  .. (a);
+\end{drawstack}
+  
+\end{frame} 
+
+\begin{frame}{Escaping variables}
+
+The compiler normally tries to place variable in registers.
+
+The frame slot may be ignored.
+
+However, if we apply \texttt{\&} to a variable, its value must be kept in the frame slot.
+\end{frame}
+
+\begin{frame}[fragile]{Call with pointer: calling function}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+void f(long x, long *p)
+{
+  *p = x;
+}
+
+long g()
+{
+  long a = 42;
+  f(a + 1, &a);
+  return a;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+g:                                
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$16, %rsp
+	leaq	-8(%rbp), %rsi
+	movq	$42, -8(%rbp)
+	movq	-8(%rbp), %rax
+	addq	$1, %rax
+	movq	%rax, %rdi
+	callq	f
+	movq	-8(%rbp), %rax
+	addq	$16, %rsp
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+
+
+\begin{frame}[fragile]{Call with pointer: called function}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+void f(long x, long *p)
+{
+  *p = x;
+}
+
+long g()
+{
+  long a = 42;
+  f(a + 1, &a);
+  return a;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:  
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movq	%rdi, -8(%rbp)
+	movq	%rsi, -16(%rbp)
+	movq	-8(%rbp), %rsi
+	movq	-16(%rbp), %rdi
+	movq	%rsi, (%rdi)
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Call with pointer: optimized with -O3}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+void f(long x, long *p)
+{
+  *p = x;
+}
+
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:  
+	movq	%rdi, (%rsi)
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+\section{Function pointers}
+
+
+\begin{frame}[fragile]{Function pointer as function parameter}
+\begin{verbatim}
+void g(void (*h)(int))
+{
+    int x = 10;
+    h(x + 2);
+}
+    
+void f(int y) { ... }
+
+... g(f) ...
+\end{verbatim}
+
+\begin{tikzpicture}[scale=.8]
+  \stacktop{}
+  \startframe
+%\cellcom{return address for \texttt g} 
+      \cell{$\bullet$} 
+          \coordinate (a) at (currentcell.center);       
+    \cellcom{h}  
+  \cell{\texttt{10}}        
+    \cellcom{x}  
+\finishframe{frame for \texttt g\ } 
+  \startframe
+   \cell{\texttt{12}}  
+    \cellcom{y} 
+ \finishframe{frame for \texttt f\ } 
+   \drawstruct{(6,-.5)})
+  \structcell[padding]{code for f}
+ \coordinate (O1) at (structtopleft);
+   \draw[->] (a) .. controls (3,-2) and (4,-1) ..  (O1);
+\end{tikzpicture}
+  
+\end{frame}   
+
+
+\begin{frame}[fragile]{Function pointer as a parameter}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long (*g)(long))
+{
+  return g(42);
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:                   
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movabsq	$42, %rax
+	movq	%rdi, -8(%rbp)
+	movq	%rax, %rdi
+	callq	*-8(%rbp)
+	addq	$16, %rsp
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
 
 
 \end{document}
