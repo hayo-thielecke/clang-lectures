@@ -475,10 +475,10 @@ The declarations tell us the size: long x means x needs 8 bytes
 That is why C has type declarations in the first place
 
 \begin{verbatim}
-long f(int x, int y) // put y at -8 and x at -16
+long f(long x, long y) // put y at -8 and x at -16
 {
-    int a;    // put a at -24
-    int b;    // put b at -32
+    long a;    // put a at -24
+    long b;    // put b at -32
     a = x;    // now we know where a and x are 
               // relative to rbp
 }    
@@ -489,10 +489,10 @@ Exercise: what happens if we also have char and float declarations?
 
 \begin{frame}[fragile]{Clang stack frame example}
 \begin{verbatim}
-long f(int x, int y) // put y at -8 and x at -16
+long f(long x, long y) // put y at -8 and x at -16
 {
-    int a;    // put a at -24
-    int b;    // put b at -32
+    long a;    // put a at -24
+    long b;    // put b at -32
     ...
 }
 \end{verbatim}
@@ -524,13 +524,13 @@ long f(long x, long y)
 \end{verbatim}
 
 \begin{eqnarray*}
-\texttt y&\mapsto& \texttt{rdi}
+\texttt x&\mapsto& \texttt{rdi}
 \\
-\texttt x&\mapsto& \texttt{rsi}
+\texttt y&\mapsto& \texttt{rsi}
 \\
-\texttt y&\mapsto& \texttt{rbp}-8
+\texttt x&\mapsto& \texttt{rbp}-8
 \\
-\texttt x&\mapsto& \texttt{rbp}-16 
+\texttt y&\mapsto& \texttt{rbp}-16 
 \\
 \texttt a&\mapsto& \texttt{rbp}-24
 \\
@@ -587,6 +587,23 @@ f:
 \end{minipage}
 \end{frame}
 
+\begin{frame}{Leaf functions}
+
+A ``leaf'' function is one that does not call any functions.
+
+It is a leaf in the control flow graph/tree: 
+\\
+leaf = node without children.
+
+Leaf functions can be compiled more simply:
+\\
+no need to adjust stack pointer
+\\
+no need to save registers into frame
+\\
+Some leaf functions can work entirely on registers, which is efficient.
+\end{frame}
+
 \begin{frame}[fragile]{Many arguments $\Rightarrow$ spill into the stack}
 Some passed on the stack, not in registers. These have positive indices. Why?
 \\[2em]
@@ -617,7 +634,44 @@ We will not use lots of arguments. While a C compiler must allow it, it is not g
 
 \end{frame}
 
-\begin{frame}[fragile]{Calling another function}
+
+\begin{frame}[fragile]{Stretch exercise on calling conventions}
+
+Here is a function definition very similar to one in the original manual on B, the predecessor of C.
+\begin{verbatim}
+void printn(n, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9)
+/* print n arguments as integers */
+{
+  int i, *p;
+  p = &x0;
+  for(i=0; i<n; i++) printf("%d\n", p[i]); 
+}
+\end{verbatim}
+Explain how this function could work. You may assume that all parameters are passed on the stack, and in reverse order. 
+
+Will it still work in Clang?
+\end{frame}
+
+\begin{frame}[fragile]{Calling functions}
+A function call
+\begin{verbatim}
+f(E1, ... , En)
+\end{verbatim}
+is broken down into into steps like this
+\begin{verbatim}
+arg1 = E1;
+...
+argn = En;
+call f;
+\end{verbatim}
+where \texttt{argi} are the argument positions of the calling convention.
+
+Note: in C, the order for computing \texttt{argi} is unspecified to give the compiler the freedom to optimize.
+
+If a function calls some function (i.e., it is non-leaf), it needs to adjust the stack pointer.
+\end{frame}
+
+\begin{frame}[fragile]{Calling another function example}
 \begin{minipage}{.5\textwidth}
 \begin{verbatim}
 long f(long x)
@@ -645,12 +699,12 @@ f:
 \end{minipage}
 \vspace{1em}
 
-Why is there the following code?
-\begin{verbatim}
-	subq	$16, %rsp
-	...
-	addq	$16, %rsp	
-\end{verbatim}
+%Why is there the following code?
+%\begin{verbatim}
+%	subq	$16, %rsp
+%	...
+%	addq	$16, %rsp	
+%\end{verbatim}
 
 
 \end{frame}
@@ -729,13 +783,31 @@ void g()
   
 \end{frame} 
 
-\begin{frame}{Escaping variables}
+\begin{frame}{Escaping variables and stack frames}
 
-The compiler normally tries to place variable in registers.
+The compiler normally tries to place variables in registers when optimizing.
 
 The frame slot may be ignored.
 
 However, if we apply \texttt{\&} to a variable, its value must be kept in the frame slot.
+
+The variable ``escapes'' from the frame in the sense that it can be referred to from outside.
+
+\begin{drawstack}[scale=.5]
+\stacktop{}
+  
+% \startframe
+    \cell{12}  \cellcomL{x}
+    \coordinate (a) at (currentcell.east);
+          \cell{\dots}  
+     \separator 
+%\finishframe{g} 
+%\startframe
+     \cell{$\bullet$}  \cellcomL{p}
+ \coordinate (p) at (currentcell.center);
+%\finishframe{f} 
+  \draw[->] (p) .. controls (4,-4) and (4,-1)  .. (a);
+\end{drawstack}
 \end{frame}
 
 \begin{frame}[fragile]{Call with pointer: calling function}
@@ -874,7 +946,7 @@ void f(int y) { ... }
 \begin{verbatim}
 long f(long (*g)(long))
 {
-  return g(42);
+  return g(42) + 2;
 }
 \end{verbatim}
 \end{minipage}
@@ -893,7 +965,335 @@ f:
 	ret
 \end{verbatim}
 \end{minipage}
+\vspace{3em}
+
+Not optimized. We'll see tailcall optimization later.
 \end{frame}
+
+
+\begin{frame}[fragile]{Buffer overflow on the call stack}
+\small
+\begin{verbatim}
+int vulnerable_function()
+{
+    int winner = 0; // suppose this is security-critical
+    char name[8];   // this is the buffer to be overflown
+    
+    printf("Please enter your name:\n");
+    fgets(name, 200, stdin);
+    ...
+}
+\end{verbatim}
+Input \texttt{blahblahbl} overflows the string variable on the stack:
+\begin{center}
+\begin{tikzpicture}[scale=.6]
+\cell{}  \cellcom{return address}
+\cell{\texttt{bl\textbackslash 0}}  \cellcom{winner}
+\cell{\texttt{blahblah}}  \cellcom{name}
+\end{tikzpicture}
+  \end{center}
+ Note: the call stack grows towards \alert{lower} machine addresses.
+\end{frame} 
+
+\begin{frame}[fragile]{Stretch exercise on buffer overflow}
+Here is some code vulnerable to classic buffer overflow:
+\begin{verbatim}
+void bufwin()
+{
+  int winner = 0; // suppose this is security-critical
+  char name[10]; // automatic, so stack-allocated  
+  printf("Please enter your name:\n");
+  fgets(name, 200, stdin); // overflow array name
+  if (winner) // attacker overflowed name into winner
+    printf("You WIN, %s\n", name);
+  else
+    printf("You LOSE, %s\n", name);
+}
+\end{verbatim}
+On modern compilers, this attack will not succeed. Look into the assembly code and see how the defence works.
+\end{frame}
+
+
+
+\section{Optimizations: inlining and tail calls}
+
+
+\begin{frame}{Function inlining}
+
+Function inlining = do a function call at compile time.
+
+Saves the cost of a function call at runtime.
+
+Copy body of called function + fill in arguments.
+
+Be careful about side effects in the arguments.
+
+Modern C compilers do inlining, so C macros are less important.
+
+\end{frame}
+
+\begin{frame}[fragile]{Function inlining example}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long sq(long x)
+{
+  return x * x;
+}
+
+long f(long y)
+{
+  long z = sq(++y);
+  return z;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:                   
+	incq	%rdi
+	imulq	%rdi, %rdi
+	movq	%rdi, %rax
+	ret
+\end{verbatim}
+\end{minipage}
+\\[2em]
+
+Note: cannot just do \texttt{++y * ++y}
+\end{frame}
+
+
+
+\begin{frame}[fragile]{Tail call optimization}
+
+Tail position = the last thing that happens inside a function body before the return.
+
+
+Here f is in tail position:
+\begin{verbatim}
+return f(E);
+\end{verbatim}
+f is not in tail position here:
+\begin{verbatim}
+return 5 + f(E);
+\end{verbatim}
+or here:
+\begin{verbatim}
+return f(E) - 6;
+\end{verbatim}
+A function call in tail position can be compiled as a jump.
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]{Function as a parameter, non-tailcall }
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long (*g)(long))
+{
+  return g(42) - 6;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f: 
+	pushq	%rax
+	movq	%rdi, %rax
+	movl	$42, %edi
+	callq	*%rax
+	addq	$-6, %rax
+	popq	%rdx
+	ret
+\end{verbatim}
+\end{minipage}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Function as a parameter, tailcall optimized}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+long f(long (*g)(long))
+{
+  return g(42);
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+\begin{verbatim}
+f:                              
+	movq	%rdi, %rax
+	movl	$42, %edi
+	jmpq	*%rax  # TAILCALL
+\end{verbatim}
+\end{minipage}
+\end{frame}
+
+
+\begin{frame}{Stretch exercise: vectorizing optimizations}
+
+Take some simple code, say factorial.
+
+Compile it on the latest version of clang with all optimizations enabled.
+
+Try to understand what the resulting code does.
+
+It will probably look very different to the source code.
+
+Loop unrolling to enable parallel computation.
+
+\end{frame}
+
+\section{Compiling structures and objects}
+
+\begin{frame}[fragile]{Compiling structures and objects}
+
+Same idea as in stack frames:
+
+access in memory via
+pointer + index
+
+Structure \alert{definition} tells the compiler the size and indices of the members.
+
+No code is produced for a struct definition on its own. 
+
+But the compiler's symbol table is extended: it knows about the member names and their types.
+
+Structure \alert{access} then uses indexed addressing using those indices.
+
+\begin{verbatim}
+struct S {
+  T1 x;
+  T2 y;
+};
+\end{verbatim}
+\pause
+\texttt x is a index 0\\
+ \texttt y is at \texttt{sizeof(T2)} + padding for alignment
+\end{frame}
+
+\begin{frame}[fragile]{Structure access}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+struct S {
+  long x;
+  long y;
+};
+
+void s(struct S *p)
+{
+  p->x = 23;
+  p->y = 45;
+}
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.45\textwidth}
+\begin{verbatim}
+s:      
+   pushq   %rbp
+   movq    %rsp, %rbp
+   movq    $23, (%rdi)
+   movq    $45, 8(%rdi)
+   popq    %rbp
+   retq
+\end{verbatim}
+\end{minipage}
+\begin{eqnarray*}
+\texttt x&\mapsto& 0
+\\
+\texttt y&\mapsto& 8
+\end{eqnarray*}
+\end{frame}
+
+
+\begin{frame}{Member functions of objects}
+
+In C++, functions defined inside classes (``member functions'') have access to other members of the class.
+
+Implemented using \texttt{this} pointer.
+
+The \texttt{this} pointer points at the object (not the class).
+
+In a call of a member function, the \texttt{this} pointer is passed like an additional parameter.
+
+Following this extra parameter accesses gives access to members.
+
+\end{frame}
+
+\begin{frame}[fragile]{Member function access to object example}
+\begin{minipage}{.5\textwidth}
+\begin{verbatim}
+class C {
+  long n;
+public:
+  long f() 
+  { 
+    return n; 
+  }
+};
+\end{verbatim}
+\end{minipage}
+%
+\begin{minipage}{.4\textwidth}
+Code for f:
+\begin{verbatim}
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movq	%rdi, -8(%rbp)
+	movq	-8(%rbp), %rdi
+	movq	(%rdi), %rax
+	popq	%rbp
+	ret
+\end{verbatim}
+\end{minipage}
+
+\end{frame}
+\begin{frame}[fragile]{Exercise on structures}
+Suppose the following structure definition is given:
+\begin{verbatim}
+struct S {
+  struct S *next;
+  struct S *prev;
+  long data;
+};
+\end{verbatim}
+%
+Suppose a pointer \texttt p is held in register \texttt{\%rsi}. Translate the following C statements to assembly:
+\begin{verbatim}
+p->data = 12345;
+p->next = p->prev->next;
+\end{verbatim}
+\end{frame}
+
+\begin{frame}[fragile]{Stretch exercise on structures}
+
+Building on what you have learned about structures, how are C unions compiled?
+
+For example, consider 
+\begin{verbatim}
+union u {
+  A x;
+  B y;
+};
+\end{verbatim}
+
+What are the adresses for \texttt{A} and \texttt{B}?
+\end{frame}
+
+\begin{frame}{More on C++}
+
+If you are interested in object-orientation, you can do more experiments by observing how Clang compiles C++ code.
+
+Example: virtual function table, implemented using yet more pointers.
+
+But compiled C++ is harder to read than for C, due to name mangling. 
+\end{frame}
+
 
 
 
