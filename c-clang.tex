@@ -902,6 +902,22 @@ f:
 \end{minipage}
 \end{frame}
 
+\begin{frame}[fragile]{Pointers exercise: my god, it's full of stars}
+Suppose there are multiple pointer dereferences:
+
+\begin{verbatim}
+void f(long x, long ***p)
+{
+  ***p = x;
+}
+
+\end{verbatim}
+
+How should this be compiled? Hint: multiple indirect addressing, \texttt{(\%rdi)}.
+\\
+Draw the memory with arrows for pointers as illustration.
+\end{frame}
+
 \section{Function pointers}
 
 
@@ -1020,15 +1036,24 @@ On modern compilers, this attack will not succeed. Look into the assembly code a
 
 \begin{frame}{Function inlining}
 
+\begin{itemize}
+\item
 Function inlining = do a function call at compile time.
-
+\item
 Saves the cost of a function call at runtime.
-
+\item
 Copy body of called function + fill in arguments.
+%\item Compiler needs to be careful about side effects in the arguments.
+\item C even has a keyword \texttt{inline}, but Clang is smart enough to know when to inline anyway
+\item
+Modern C compilers do inlining, so C macros can be avoided.
+\item
+Modern C++ uses template, which give the compiler many opportunities for inlining.
+\item
+Inlining has a clean theoretical foundation: beta reduction in the lambda calculus.
 
-Be careful about side effects in the arguments.
+\end{itemize}
 
-Modern C compilers do inlining, so C macros are less important.
 
 \end{frame}
 
@@ -1062,6 +1087,25 @@ f:
 Note: cannot just do \texttt{++y * ++y}
 \end{frame}
 
+\begin{frame}[fragile]{Inlining exercise}
+
+Simplify the following C code as much as possible by performing function inling.
+
+\begin{verbatim}
+long sq(long x) { return x * x; }
+
+long f(long (*g)(long))
+{
+  return g(42) + 2;
+}
+
+long applyftosq()
+{
+  return f(sq);
+}
+\end{verbatim}
+
+\end{frame}
 
 
 \begin{frame}[fragile]{Tail call optimization}
@@ -1213,15 +1257,18 @@ s:
 
 \begin{frame}{Member functions of objects}
 
+\begin{itemize}
+\item
 In C++, functions defined inside classes (``member functions'') have access to other members of the class.
-
+\item
 Implemented using \texttt{this} pointer.
-
+\item
 The \texttt{this} pointer points at the object (not the class).
-
+\item
 In a call of a member function, the \texttt{this} pointer is passed like an additional parameter.
-
-Following this extra parameter accesses gives access to members.
+\item
+Dereferencing this extra parameter accesses gives access to members.
+\end{itemize}
 
 \end{frame}
 
@@ -1252,7 +1299,12 @@ Code for f:
 \end{verbatim}
 \end{minipage}
 
+\vspace{3em}
+
+Exercise: draw the stack and heap to illustrate how the function above works.
 \end{frame}
+
+
 \begin{frame}[fragile]{Exercise on structures}
 Suppose the following structure definition is given:
 \begin{verbatim}
