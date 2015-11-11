@@ -1034,6 +1034,23 @@ On modern compilers, this attack will not succeed. Look into the assembly code a
 \section{Optimizations: inlining and tail calls}
 
 
+\begin{frame}{Optimizations}
+
+There are many different optimizations, for example:
+
+\begin{itemize}
+\item constant propagation: for example, if you have \texttt{x = 42}, the compiler may replace some occurrences of \texttt x  by \texttt{42}
+\item compile-time evaluation: for example, given \texttt{x = 42 + 23}, the compiler may 
+calculate that 42+23 = 65
+\item dead code elimination: if some code can never be reached, the compiler deletes it; it may also give warnings
+\item function linling, see below 
+\item tail call optimization, see below
+\end{itemize}
+
+Exercise: write some code with opportunities for constant propagation, and see how Clang compiles it.
+\end{frame}
+
+
 \begin{frame}{Function inlining}
 
 \begin{itemize}
@@ -1056,6 +1073,7 @@ Inlining has a clean theoretical foundation: beta reduction in the lambda calcul
 
 
 \end{frame}
+
 
 \begin{frame}[fragile]{Function inlining example}
 \begin{minipage}{.5\textwidth}
@@ -1131,34 +1149,38 @@ A function call in tail position can be compiled as a jump.
 
 
 
-\begin{frame}[fragile]{Function as a parameter, non-tailcall }
+\begin{frame}[fragile]{Function pointer as a parameter}
 \begin{minipage}{.5\textwidth}
 \begin{verbatim}
 long f(long (*g)(long))
 {
-  return g(42) - 6;
+  return g(42) + 2;
 }
 \end{verbatim}
 \end{minipage}
 %
 \begin{minipage}{.4\textwidth}
 \begin{verbatim}
-f: 
-	pushq	%rax
-	movq	%rdi, %rax
-	movl	$42, %edi
-	callq	*%rax
-	addq	$-6, %rax
-	popq	%rdx
+f:                   
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movabsq	$42, %rax
+	movq	%rdi, -8(%rbp)
+	movq	%rax, %rdi
+	callq	*-8(%rbp)
+	addq	$16, %rsp
+	popq	%rbp
 	ret
 \end{verbatim}
 \end{minipage}
+\vspace{3em}
 
 \end{frame}
 
 
+
 \begin{frame}[fragile]{Function as a parameter, tailcall optimized}
-\begin{minipage}{.5\textwidth}
+\begin{minipage}{.45\textwidth}
 \begin{verbatim}
 long f(long (*g)(long))
 {
@@ -1167,7 +1189,7 @@ long f(long (*g)(long))
 \end{verbatim}
 \end{minipage}
 %
-\begin{minipage}{.4\textwidth}
+\begin{minipage}{.5\textwidth}
 \begin{verbatim}
 f:                              
 	movq	%rdi, %rax
@@ -1175,6 +1197,20 @@ f:
 	jmpq	*%rax  # TAILCALL
 \end{verbatim}
 \end{minipage}
+\end{frame}
+
+
+\begin{frame}[fragile]{Tailcall exercise}
+
+Explain which of these (if any) is a tail call.
+
+\begin{verbatim}
+return (*g)();
+\end{verbatim}
+%
+\begin{verbatim}
+return *g();
+\end{verbatim}
 \end{frame}
 
 
@@ -1255,6 +1291,37 @@ s:
 \end{frame}
 
 
+\begin{frame}[fragile]{Stack and heap}
+
+Structures and objects are mainly on the heap, via \texttt{malloc} or \texttt{new}.
+
+The compiled code follows a pointer, whether this leads into the stack or heap.
+\begin{verbatim}
+p = malloc(N);
+q = p;
+\end{verbatim}
+
+\begin{tikzpicture}[scale=.6]
+  \draw (0,1) node{Stack};
+  \draw (6,1) node{Heap};
+
+  \stacktop{}
+  \cell{\texttt{$\bullet$}}        
+  \cellcomL{p} \coordinate (p3) at (currentcell.center);
+  \cell{\texttt{$\bullet$}}  
+  \cellcomL{q} \coordinate (p4) at (currentcell.center);
+\stackbottom
+
+  \drawstruct{(6,0)})
+  \structcell[padding]{N bytes}
+ \coordinate (O1) at (structtopleft);
+
+  \draw[->] (p3) -- (O1);
+  \draw[->] (p4) .. controls (3,-2) and (4,-1) .. (O1);
+\end{tikzpicture}
+\end{frame}
+
+
 \begin{frame}{Member functions of objects}
 
 \begin{itemize}
@@ -1301,9 +1368,16 @@ Code for f:
 
 \vspace{3em}
 
-Exercise: draw the stack and heap to illustrate how the function above works.
+Exercise: draw the stack and heap to illustrate how the function above works, assuming the object has been allocated on the heap.
 \end{frame}
 
+\begin{frame}{OO and LLVM}
+
+LLVM does not have a built-in notion of object.
+
+Inside LLVM (in the IR), OO is decomposed into pointers, functions, and structures.
+
+\end{frame}
 
 \begin{frame}[fragile]{Exercise on structures}
 Suppose the following structure definition is given:
